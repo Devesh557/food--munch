@@ -1,0 +1,21 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@google/generative-ai": "^0.16.0",
+    "axios": "^1.7.2",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.53.2"
+  }
+}
