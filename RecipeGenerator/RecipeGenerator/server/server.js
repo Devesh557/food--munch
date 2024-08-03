@@ -1,36 +1,31 @@
-
-
-import express, { json } from 'express';
-import cors from 'cors';
-import fetch from 'node-fetch';
-
+const express = require("express");
+const cors = require("cors");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+require('dotenv').config(); // Load environment variables
 
 const app = express();
 const PORT = 3001;
 
-const API_KEY = 'AIzaSyAcvaMwbKIMSI4yx3bl4HP0TQaWuum5fjQ'; // Replace with your actual API key
-const MODEL_NAME = 'gemini-1.5-flash';
-const GOOGLE_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
-
+// Enable CORS for all routes
 app.use(cors());
-app.use(json());
 
+// Initialize Gemini model
+const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-app.get('/recipeStream', async (req, res) => {
+// SSE Endpoint
+app.get("/recipeStream", async (req, res) => {
   const { ingredients, mealType, cuisine, cookingTime, complexity } = req.query;
 
   console.log(req.query);
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
 
-  const sendEvent = (data) => {
-    if (data && data.text) {
-      res.write(`data: ${JSON.stringify({ action: 'chunk', chunk: data.text })}\n\n`);
-    } else {
-      res.write(`data: ${JSON.stringify({ action: 'close' })}\n\n`);
-    }
+  // Function to send messages
+  const sendEvent = (text) => {
+    res.write(`data: ${JSON.stringify({ action: "chunk", chunk: text })}\n\n`);
   };
 
   const prompt = [
@@ -43,36 +38,23 @@ app.get('/recipeStream', async (req, res) => {
     "Please provide a detailed recipe, including steps for preparation and cooking. Only use the ingredients provided.",
     "The recipe should highlight the fresh and vibrant flavors of the ingredients.",
     "Also give the recipe a suitable name in its local language based on cuisine preference."
-  ].join(' ');
+  ].join(" ");
 
   try {
-    const response = await fetch(GOOGLE_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: {
-          text: prompt
-        },
-        temperature: 0.7,
-        maxOutputTokens: 500
-      }),
-    });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = await response.text();
 
-    const result = await response.json();
-    console.log('API Response:', result);  // This will print the API return data
-
-
-    // if (result && result.candidates && result.candidates.length > 0) {
-    //   sendEvent(result.candidates[0]);
-    // } else {
-    //   sendEvent(null);
-    // }
+    // Send the full text as a single chunk
+    sendEvent(text);
+    res.write(`data: ${JSON.stringify({ action: "close" })}\n\n`);
   } catch (error) {
-    console.error('Error fetching data from Google Generative AI:', error);
-    res.status(500).json({ error: 'Error fetching data from Google Generative AI' });
+    console.error("Error fetching data from Gemini API:", error);
+    res.write(`data: ${JSON.stringify({ action: "error", message: "Error fetching data from Gemini API." })}\n\n`);
   }
 
-  req.on('close', () => {
+  // Clear interval and close connection on client disconnect
+  req.on("close", () => {
     res.end();
   });
 });
